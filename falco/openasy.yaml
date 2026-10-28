@@ -1,0 +1,48 @@
+# Falco's settings for runtime-agent (ADR 0066). Put this file in /etc/falco/config.d/ next to Falco's own falco.yaml:
+# Falco reads the files there after its own, so these lines win and the rest of falco.yaml stays as it ships.
+
+# Alerts as JSON, with the output line and the rule's tags, posted to the agent on this host.
+json_output: true
+json_include_output_property: true
+json_include_tags_property: true
+http_output:
+  enabled: true
+  url: http://127.0.0.1:2801/
+
+# The agent asks Falco's web server whether it is up and which version it is.
+webserver:
+  enabled: true
+  listen_address: 127.0.0.1
+  listen_port: 8765
+
+# The fields a process tree, a container and a file change are read from, added to every rule's alert. Falco names
+# the process and its parent with their command lines, and older ancestors by name and pid.
+append_output:
+  - match:
+      source: syscall
+    extra_fields:
+      - proc.pid
+      - proc.name
+      - proc.exepath
+      - proc.cmdline
+      - proc.ppid
+      - proc.pname
+      - proc.pcmdline
+      - proc.apid[2]
+      - proc.aname[2]
+      - proc.apid[3]
+      - proc.aname[3]
+      - proc.apid[4]
+      - proc.aname[4]
+      - proc.apid[5]
+      - proc.aname[5]
+      - user.name
+      - container.id
+      - container.name
+      - container.image.repository
+      - container.image.tag
+      - k8s.ns.name
+      - k8s.pod.name
+      - evt.type
+      - fd.name
+      - fd.typechar

@@ -1,0 +1,11 @@
+# runtime-agent's Falco rule (ADR 0066). Put it in /etc/falco/rules.d/.
+#
+# It sees every program start, for Runtime's process inventory: what ran where and what started it. The agent counts
+# the starts by program, parent, user and container and sends the counts, so this rule never reaches Runtime as an
+# event or a detection. Its tag openasy_inventory is how the agent knows it; keep it.
+- rule: OpenAsy process started
+  desc: Every program start, counted by runtime-agent for Runtime's process inventory.
+  condition: spawned_process
+  output: Program started (exe=%proc.exepath parent=%proc.pname user=%user.name container=%container.name)
+  priority: INFORMATIONAL
+  tags: [openasy_inventory]

@@ -1,0 +1,49 @@
+# Falco and runtime-agent on one host (ADR 0066). Falco watches the kernel with its modern eBPF probe and posts each
+# alert to the agent on 127.0.0.1:2801; the agent sends them to Runtime and reads the watched files, read-only.
+#
+#   openssl rand -hex 32 > openasy-agent-kek   # the agent's own key: it seals the agent's secret (ADR 0021)
+#   RUNTIME_URL=https://runtime.example.com RUNTIME_ENROLL_TOKEN=oie_... docker compose up -d
+#
+# The enrolment token comes from Runtime, under Hosts; the agent needs it once and keeps its own secret afterwards.
+services:
+  falco:
+    image: falcosecurity/falco:0.45.1
+    restart: unless-stopped
+    # eBPF needs the host's kernel: Falco runs privileged, in the host's PID and network namespaces, as it documents.
+    privileged: true
+    pid: host
+    network_mode: host
+    command: ["falco", "-o", "engine.kind=modern_ebpf"]
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock:ro # container names and images
+      - /proc:/host/proc:ro
+      - /etc:/host/etc:ro
+      - ./falco/openasy.yaml:/etc/falco/config.d/openasy.yaml:ro
+      - ./falco/openasy_rules.yaml:/etc/falco/rules.d/openasy_rules.yaml:ro
+
+  runtime-agent:
+    image: ghcr.io/openasy/runtime-agent:0.1.0 # always the same version as runtime
+    restart: unless-stopped
+    network_mode: host # Falco reaches it on 127.0.0.1:2801, and it reaches Falco's web server on 127.0.0.1:8765
+    read_only: true
+    # Root without any capability: it reads root's own files, such as /etc/shadow, through a read-only mount, and
+    # nothing more. Without it those files are compared by size and mode only.
+    user: "0:0"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - runtime-agent-data:/data # its secret, sealed
+      - /:/host:ro # the watched files, read-only
+    secrets:
+      - openasy-agent-kek
+    environment:
+      RUNTIME_URL: ${RUNTIME_URL:?the address of runtime}
+      RUNTIME_ENROLL_TOKEN: ${RUNTIME_ENROLL_TOKEN:-}
+    depends_on: [falco]
+
+volumes:
+  runtime-agent-data:
+
+secrets:
+  openasy-agent-kek:
+    file: ./openasy-agent-kek
